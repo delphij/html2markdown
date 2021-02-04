@@ -35,6 +35,7 @@ _supportedTags = {
 	'p',
 	'a',
 	'h1','h2','h3','h4','h5','h6',
+	'strike','s',
 	'strong','b',
 	'em','i',
 	'ul','ol','li',
@@ -45,10 +46,18 @@ _supportedTags = {
 }
 _supportedAttributes = (
 	'a href',
+	'a rel',
 	'a title',
+	'a class',
+	'b style',
+	'b color',
 	'img alt',
 	'img src',
+	'img height',
+	'img width',
 	'img title',
+	'ol style',
+	'pre style',
 )
 
 _inlineTags = {
@@ -87,6 +96,7 @@ _inlineTags = {
 	#'noscript',
 	'object',
 	#'output',
+        'pre',
 	'picture',
 	#'progress',
 	'q',
@@ -213,8 +223,15 @@ def _markdownify(tag, _listType=None, _blockQuote=False, _listIndex=1):
 		tag.string = '\n---\n'
 		tag.unwrap()
 	elif tag.name == 'pre':
-		tag.insert_before('\n\n')
-		tag.insert_after('\n\n')
+		if children:
+			for child in children:
+				_markdownify(child)
+		if not tag.string or (len(tag.string.split('\n')) > 1):
+			tag.insert_before('\n\n```\n')
+			tag.insert_after('\n```\n\n')
+		else:
+			tag.insert_before(' `')
+			tag.insert_after('` ')
 		if tag.code:
 			if not _supportedAttrs(tag.code):
 				return
@@ -226,15 +243,14 @@ def _markdownify(tag, _listType=None, _blockQuote=False, _listIndex=1):
 				br.string = '\n'
 				br.unwrap()
 			tag.code.unwrap()
-			lines = unicode(tag).strip().split('\n')
-			lines[0] = lines[0][5:]
-			lines[-1] = lines[-1][:-6]
-			if not lines[-1]:
-				lines.pop()
-			for i,line in enumerate(lines):
-				line = line.replace(u'\xa0', ' ')
-				lines[i] = '    %s' % line
-			tag.replace_with(BeautifulSoup('\n'.join(lines), 'html.parser'))
+		lines = unicode(tag).strip().split('\n')
+		lines[0] = lines[0][lines[0].find('>')+1:]
+		lines[-1] = lines[-1][:-6]
+		if not lines[-1]:
+			lines.pop()
+		for i,line in enumerate(lines):
+			line = line.replace(u'\xa0', ' ')
+		tag.replace_with(BeautifulSoup('\n'.join(lines), 'html.parser'))
 		return
 	elif tag.name == 'code':
 		# inline code
@@ -302,22 +318,33 @@ def _markdownify(tag, _listType=None, _blockQuote=False, _listIndex=1):
 				_markdownify(child, _listType=tag.name, _listIndex=i+1)
 			return
 		elif tag.name == 'li':
+			monospace = False
 			if not _listType:
 				# <li> outside of list; ignore
 				return
 			if _listType == 'ul':
 				tag.insert_before('*   ')
 			else:
-				tag.insert_before('%d.   ' % _listIndex)
+				if tag.string and all((ord(c) < 128 or ord(c) == 0xa0) for c in tag.string):
+					tag.insert_before('%d.   ``' % _listIndex)
+					tag.insert_after('``\n')
+					monospace = True
+				else:
+					tag.insert_before('%d.   ' % _listIndex)
 			for child in children:
 				_markdownify(child)
 			for c in tag.contents:
 				if type(c) != bs4.element.NavigableString:
 					continue
 				c.replace_with('\n    '.join(c.split('\n')))
-			tag.insert_after('\n')
+			if not monospace:
+				tag.insert_after('\n')
 			tag.unwrap()
 			return
+		elif tag.name in ('strike','s'):
+			tag.insert_before('~~')
+			tag.insert_after('~~')
+			tag.unwrap()
 		elif tag.name in ('strong','b'):
 			tag.insert_before('__')
 			tag.insert_after('__')
