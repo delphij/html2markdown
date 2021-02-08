@@ -54,9 +54,11 @@ _supportedAttributes = (
 	'img alt',
 	'img src',
 	'img height',
+	'img border',
 	'img width',
 	'img title',
 	'ol style',
+	'p style',
 	'pre style',
 )
 
